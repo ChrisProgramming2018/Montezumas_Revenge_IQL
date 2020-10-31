@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import random
 from collections import namedtuple, deque
-from models import QNetwork, RNetwork, Classifier
+from models import QNetwork, RNetwork, Classifier, Encoder
 import torch
 import torch.nn  as nn
 import torch.nn.functional as F
@@ -19,6 +19,7 @@ class Agent():
         self.action_dim = action_dim
         self.seed = 0
         self.device = 'cuda'
+        print("cuda ", torch.cuda.is_available())
         self.batch_size = config["batch_size"]
         self.lr = config["lr"]
         self.gamma = 0.99
@@ -29,6 +30,11 @@ class Agent():
         self.R_local = RNetwork(state_size,action_dim, self.seed).to(self.device)
         self.R_target = RNetwork(state_size, action_dim, self.seed).to(self.device)
         self.predicter = Classifier(state_size, action_dim, self.seed).to(self.device)
+        self.encoder = Encoder(config).to(self.device)
+        self.encoder_optimizer = torch.optim.Adam(self.encoder.parameters(), self.lr)
+        self.target_encoder = Encoder(config).to(self.device)
+        self.target_encoder.load_state_dict(self.encoder.state_dict())
+        
         # optimizer
         self.optimizer_q_shift = optim.Adam(self.q_shift_local.parameters(), lr=self.lr)
         self.optimizer_q = optim.Adam(self.Q_local.parameters(), lr=self.lr)
@@ -66,7 +72,9 @@ class Agent():
             self.a3 += 1
 
     def learn(self, memory):
-        states, next_states, actions = memory.expert_policy(self.batch_size)
+        states, next_states, actions, dones = memory.expert_policy(self.batch_size)
+        states = self.encoder.create_vector(states)
+        next_states = self.target_encoder.create_vector(states)
         self.steps += 1
         #print("  ")
         #print("  ")
@@ -77,11 +85,12 @@ class Agent():
         self.state_action_frq(states, actions)
         self.compute_shift_function(states, next_states, actions)
         self.compute_r_function(states, actions)
-        self.compute_q_function(states, next_states, actions)
+        self.compute_q_function(states, next_states, actions, dones)
         # update local nets 
         self.soft_update(self.Q_local, self.Q_target)
         self.soft_update(self.q_shift_local, self.q_shift_target)
         self.soft_update(self.R_local, self.R_target)
+        self.soft_update(self.encoder, self.target_encoder)
         return
 
 
@@ -89,7 +98,10 @@ class Agent():
         """
         
         """
-        states, next_states, actions = memory.expert_policy(self.batch_size)
+        states, next_states, actions, dones = memory.expert_policy(self.batch_size)
+        print("stat", states.shape)
+        states = self.encoder.create_vector(states)
+        next_states = self.target_encoder.create_vector(states)
         self.state_action_frq(states, actions)
 
         
@@ -99,8 +111,11 @@ class Agent():
         """
         same_state_predition = 0
         for i in range(100):
-            states, next_states, actions = memory.expert_policy(1)
+            states, next_states, actions, done = memory.expert_policy(1)
+            states = self.encoder.create_vector(states)
+            next_states = self.target_encoder.create_vector(states)
             output = self.predicter(states.unsqueeze(0))
+            output = F.softmax(output, dim=2)
             # create one hot encode y from actions
             y = actions.type(torch.long)[0][0].data
             p =torch.argmax(output.data).data
@@ -130,13 +145,14 @@ class Agent():
         #print("y shape", y.shape)
         loss = nn.CrossEntropyLoss()(output, y)
         self.optimizer_pre.zero_grad()
+        self.encoder_optimizer.zero_grad()
         loss.backward()
+        self.decoder_optimizer.step()
         self.optimizer_pre.step()
         self.writer.add_scalar('Predict_loss', loss, self.steps)
 
     def get_action_prob(self, states, actions):
         """
-
         """
         actions = actions.type(torch.long)
         #actions = actions.unsqueeze(0)
@@ -155,6 +171,7 @@ class Agent():
             return action_prob
         """
         output = self.predicter(states.unsqueeze(0))
+        output = F.softmax(output, dim=2)
         output = output.squeeze(0)
         #print("output shape ", output.shape)
         #print("action shape ", actions.shape)
@@ -170,7 +187,7 @@ class Agent():
         # print("action log {:2f} of action {} ".format(action_prob.item(), actions.item()))
         return action_prob
 
-    def compute_q_function(self, states, next_states,  actions):
+    def compute_q_function(self, states, next_states,  actions, dones):
         """
         
         """
@@ -178,18 +195,21 @@ class Agent():
         #print("update q function")
         actions = actions.type(torch.int64)
         q_est = self.Q_local(states).gather(1, actions).squeeze(1)
+        #r_pre = self.R_target(states).gather(1, actions).squeeze(1)
         r_pre = self.R_target(states).gather(1, actions).squeeze(1)
-        target_Q = self.Q_target(next_states).max(1)[0].detach()
-
-        target_Q *= self.gamma
-        q_target = r_pre + target_Q
-        #print("q pre ", q_est)
-        #print("q target ", q_target)
-        q_loss = F.mse_loss(q_est, q_target)
+        Q_target_next = self.Q_target(next_states).detach().max(1)[0]
+        #print("re ", r_pre.shape)
+        #print("tar", Q_target_next.shape)
+        # target_Q = r_pre + (self.gamma * Q_target_next * (1 - dones))
+        target_Q = r_pre + (self.gamma * Q_target_next)
+        
+        #print("q pre ", q_est.shape)
+        #print("q target ", target_Q.shape)
+        q_loss = F.mse_loss(q_est, target_Q)
         # Minimize the loss
         self.optimizer_q.zero_grad()
         q_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.Q_local.parameters(), 1)
+        #torch.nn.utils.clip_grad_norm_(self.Q_local.parameters(), 1)
         self.optimizer_q.step()
         self.writer.add_scalar('Q_loss', q_loss, self.steps)
         #print("q update")
@@ -206,7 +226,7 @@ class Agent():
         actions = actions.type(torch.int64)
         q_sh_value = self.q_shift_local(states).gather(1, actions).squeeze(1)
         #print("shape ", q_sh_value.shape)
-        target_Q = self.Q_target(next_states).max(1)[0].detach()
+        target_Q = self.Q_target(next_states).detach().max(1)[0]
         #print("target, ", target_Q.shape)
         
         
@@ -309,12 +329,16 @@ class Agent():
     def test_q_value(self, memory):
         same_action = 0
         for i in range(100):
-            states, next_states, actions = memory.expert_policy(1)
+            states, next_states, actions, dones = memory.expert_policy(1)
             q_values = self.Q_local(states)
             best_action = torch.argmax(q_values).item()
             self.debug(best_action)
             if  actions[0][0].item() == best_action:
                 same_action += 1
+            else:
+                print("Action expert ", actions[0][0].item())
+                print("Q values ", q_values)
+                print("Action prob ",  self.predicter(states.unsqueeze(0)))
         print("    ")
         al = self.debug(None)
         print("inverse action a0: {:.2f} a1: {:.2f} a2: {:.2f} a3: {:.2f}".format(al[0], al[1], al[2], al[3]))
@@ -361,6 +385,7 @@ def mkdir(base, name):
     if not os.path.exists(path):
         os.makedirs(path)
     return path
+
 
 
 

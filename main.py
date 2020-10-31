@@ -13,7 +13,6 @@ def main(args):
         param = json.load(f)
     print("use the env {} ".format(param["env_name"]))
     print(param)
-    param["locexp"] = args.locexp
     env = gym.make(param["env_name"])
 
     train(env, param)
