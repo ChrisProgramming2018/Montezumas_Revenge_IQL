@@ -1,4 +1,5 @@
 import numpy as np
+import kornia
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,17 +7,19 @@ import torch.nn.functional as F
 
 class ReplayBuffer(object):
     """Buffer to store environment transitions."""
-    def __init__(self, obs_shape, action_shape, capacity, device):
+    def __init__(self, obs_shape, action_shape, capacity, image_pad, device):
         self.capacity = capacity
         self.device = device
 
-
         self.obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
-        self.next_obses = np.empty((capacity, *obs_shape), dtype=np.float32)
+        self.next_obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
         self.actions = np.empty((capacity, *action_shape), dtype=np.int8)
         self.rewards = np.empty((capacity, 1), dtype=np.float32)
         self.not_dones = np.empty((capacity, 1), dtype=np.float32)
         self.not_dones_no_max = np.empty((capacity, 1), dtype=np.float32)
+        self.aug_trans = nn.Sequential(
+            nn.ReplicationPad2d(image_pad),
+            kornia.augmentation.RandomCrop((obs_shape[-1], obs_shape[-1])))
 
         self.idx = 0
         self.full = False
@@ -55,7 +58,7 @@ class ReplayBuffer(object):
 
     def expert_policy(self, batch_size):
         idxs = np.random.randint(0, self.capacity if self.full else self.idx, size=batch_size)
-    
+        
         obses = self.obses[idxs]
         next_obses = self.next_obses[idxs]
 
@@ -63,7 +66,12 @@ class ReplayBuffer(object):
         next_obses = torch.as_tensor(next_obses, device=self.device)
         actions = torch.as_tensor(self.actions[idxs], device=self.device)
         dones = torch.as_tensor(self.not_dones_no_max[idxs], device=self.device)
-
+        obses = obses.type(torch.float32)
+        next_obses = next_obses.type(torch.float32)
+ 
+        obses = self.aug_trans(obses)
+        next_obses = self.aug_trans(next_obses)
+        
         return obses, next_obses, actions, dones
 
 
