@@ -34,7 +34,7 @@ def train(env, config):
         text = "Inverse Episode {}  \ {} \r".format(i_episode, config["episodes"])
         print(text, end = '')
         agent.learn(memory)
-        if i_episode % 50 == 0:
+        if i_episode % 250 == 0:
             print(text)
             agent.eval_policy(env)
             agent.test_q_value(memory)

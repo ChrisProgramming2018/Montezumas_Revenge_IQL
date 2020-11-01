@@ -169,6 +169,7 @@ class Agent():
         self.optimizer_pre.zero_grad()
         self.encoder_optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.predicter.parameters(), 1)
         # print("loss pre", loss)
         self.encoder_optimizer.step()
         self.optimizer_pre.step()
@@ -223,7 +224,7 @@ class Agent():
         # Minimize the loss
         self.optimizer_q.zero_grad()
         q_loss.backward()
-        #torch.nn.utils.clip_grad_norm_(self.Q_local.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(self.Q_local.parameters(), 1)
         self.optimizer_q.step()
         self.writer.add_scalar('Q_loss', q_loss, self.steps)
         #print("q update")
@@ -250,7 +251,7 @@ class Agent():
         # Minimize the loss
         self.optimizer_q_shift.zero_grad()
         q_shift_loss.backward()
-        # torch.nn.utils.clip_grad_norm_(self.q_shift_local.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(self.q_shift_local.parameters(), 1)
         self.optimizer_q_shift.step()
         # print("q shift update")
 
@@ -299,7 +300,7 @@ class Agent():
         # Minimize the loss
         self.optimizer_r.zero_grad()
         r_loss.backward()
-        # torch.nn.utils.clip_grad_norm_(self.R_local.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(self.R_local.parameters(), 1)
         self.optimizer_r.step()
         self.writer.add_scalar('Reward_loss', r_loss, self.steps)
 
@@ -316,7 +317,10 @@ class Agent():
     def act(self, state):
         state = torch.Tensor(state).to(self.device)
         state = self.encoder.create_vector(state.unsqueeze(0))
-        action =torch.argmax(self.Q_local(state.unsqueeze(0)))
+        logging.debug("state {})".format(state))
+        action = self.Q_local(state.unsqueeze(0))
+        logging.debug("Q {})".format(action))
+        action = torch.argmax(action) 
         return action.item()
 
     def eval_policy(self, env, episode=2):
@@ -329,7 +333,10 @@ class Agent():
             steps = 0
             while True:
                 steps  +=1
-                action = self.act(state)
+                if steps < 3:
+                    action = env.action_space.sample()
+                else:
+                    action = self.act(state)
                 state = torch.Tensor(state).to(self.device)
                 next_state, reward, done, _ = env.step(action)
                 state = next_state
