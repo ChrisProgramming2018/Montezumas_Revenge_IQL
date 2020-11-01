@@ -2,6 +2,8 @@ import os
 import sys
 import numpy as np
 import random
+import gym
+import gym.wrappers
 from collections import namedtuple, deque
 from models import QNetwork, RNetwork, Classifier, Encoder
 import torch
@@ -10,10 +12,15 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.autograd import Variable
+from helper import FrameStack
+import logging
+logging.basicConfig(filename="test.log", level=logging.DEBUG) 
 
 
 class Agent():
     def __init__(self, state_size, action_size, action_dim, config):
+        self.env_name = config["env_name"]
+        self.config = config
         self.state_size = state_size
         self.action_size = action_size
         self.action_dim = action_dim
@@ -31,7 +38,7 @@ class Agent():
         self.R_target = RNetwork(state_size, action_dim, self.seed).to(self.device)
         self.predicter = Classifier(state_size, action_dim, self.seed).to(self.device)
         self.encoder = Encoder(config).to(self.device)
-        self.encoder_optimizer = torch.optim.Adam(self.encoder.parameters(), self.lr)
+        self.encoder_optimizer = torch.optim.Adam(self.encoder.parameters(), config["lr_encoder"])
         self.target_encoder = Encoder(config).to(self.device)
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         
@@ -56,7 +63,6 @@ class Agent():
         for a in range(self.action_dim):
             action = torch.Tensor(1) * 0 +  a
             self.all_actions.append(action.to(self.device))
-
     def debug(self, actions):
 
         if actions is None:
@@ -72,9 +78,18 @@ class Agent():
             self.a3 += 1
 
     def learn(self, memory):
+        """
+
+        """
         states, next_states, actions, dones = memory.expert_policy(self.batch_size)
+        states = states.type(torch.float32)
+        next_states = next_states.type(torch.float32)
+        #states = self.encoder.create_vector(states.detach())
+        #next_states = self.target_encoder.create_vector(next_states.detach())
         states = self.encoder.create_vector(states)
-        next_states = self.target_encoder.create_vector(states)
+        next_states = self.target_encoder.create_vector(next_states)
+        states = states.detach()
+        next_states = next_states.detach()
         self.steps += 1
         #print("  ")
         #print("  ")
@@ -99,9 +114,11 @@ class Agent():
         
         """
         states, next_states, actions, dones = memory.expert_policy(self.batch_size)
-        print("stat", states.shape)
-        states = self.encoder.create_vector(states)
-        next_states = self.target_encoder.create_vector(states)
+        states = states.type(torch.float32)
+        next_states = next_states.type(torch.float32)
+        # print("stat", states.shape)
+        states = self.encoder.create_vector(states.detach())
+        next_states = self.target_encoder.create_vector(next_states.detach())
         self.state_action_frq(states, actions)
 
         
@@ -112,15 +129,21 @@ class Agent():
         same_state_predition = 0
         for i in range(100):
             states, next_states, actions, done = memory.expert_policy(1)
+            states = states.type(torch.float32)
+            next_states = next_states.type(torch.float32)
             states = self.encoder.create_vector(states)
-            next_states = self.target_encoder.create_vector(states)
+            next_states = self.target_encoder.create_vector(next_states)
             output = self.predicter(states.unsqueeze(0))
+            # print("befor soft max", output)
             output = F.softmax(output, dim=2)
             # create one hot encode y from actions
             y = actions.type(torch.long)[0][0].data
             p =torch.argmax(output.data).data
             if torch.equal(y,p):
                 same_state_predition += 1
+            else:
+                print("action label", y)
+                print("prediction", output)
         self.average_prediction.append(same_state_predition)
         average_pred = np.mean(self.average_prediction)
         self.writer.add_scalar('Average prediction acc', average_pred, self.steps)
@@ -139,7 +162,6 @@ class Agent():
         #print("out shape", output.shape)
         #print("state action prediction", output[0])
         #print("max prediction", torch.argmax(output[0]).item())
-        # create one hot encode y from actions
         
         y = action.type(torch.long).squeeze(1)
         #print("y shape", y.shape)
@@ -147,21 +169,15 @@ class Agent():
         self.optimizer_pre.zero_grad()
         self.encoder_optimizer.zero_grad()
         loss.backward()
-        self.decoder_optimizer.step()
+        # print("loss pre", loss)
+        self.encoder_optimizer.step()
         self.optimizer_pre.step()
         self.writer.add_scalar('Predict_loss', loss, self.steps)
 
     def get_action_prob(self, states, actions):
         """
         """
-        actions = actions.type(torch.long)
-        #actions = actions.unsqueeze(0)
-        # actions = actions.type(torch.long).view(-1)
-        # print("actions ", actions.shape)
-        
-        # actions = actions.type(torch.long).squeeze(1)
-        
-        # check if action prob is zero
+        actions = actions.type(torch.long) 
         """
         if dim:
             output = self.predicter(states.unsqueeze(0))
@@ -177,13 +193,11 @@ class Agent():
         #print("action shape ", actions.shape)
         action_prob = output.gather(1, actions)
         #print("action pob old {} ".format(action_prob, actions))
-        # action_prob = action_prob.detach() + torch.finfo(torch.float32).eps
+        logging.debug("action_prob {})".format(action_prob))
+        action_prob = action_prob.detach() + torch.finfo(torch.float32).eps
         #print("action_prob ", action_prob.shape)
         #print("action pob {} ".format(action_prob, actions))
         action_prob = torch.log(action_prob)
-        if torch.isnan(action_prob).any():
-            print(output)
-            sys.exit()
         # print("action log {:2f} of action {} ".format(action_prob.item(), actions.item()))
         return action_prob
 
@@ -301,22 +315,27 @@ class Agent():
 
     def act(self, state):
         state = torch.Tensor(state).to(self.device)
+        state = self.encoder.create_vector(state.unsqueeze(0))
         action =torch.argmax(self.Q_local(state.unsqueeze(0)))
         return action.item()
 
     def eval_policy(self, env, episode=2):
         scores = 0
+        env  = env = gym.make(self.env_name)
+        env = FrameStack(env, self.config)
         for i_episode in range(episode):
             score = 0
             state = env.reset()
+            steps = 0
             while True:
+                steps  +=1
                 action = self.act(state)
                 state = torch.Tensor(state).to(self.device)
                 next_state, reward, done, _ = env.step(action)
                 state = next_state
                 score += reward
                 env.render()
-                if done:
+                if done or steps > self.config["max_timesteps"]:
                     scores += score
                     break
 
@@ -330,6 +349,12 @@ class Agent():
         same_action = 0
         for i in range(100):
             states, next_states, actions, dones = memory.expert_policy(1)
+            states = states.type(torch.float32)
+            next_states = next_states.type(torch.float32)
+            states = self.encoder.create_vector(states)
+            next_states = self.target_encoder.create_vector(next_states)
+            #states = states.detach()
+            #next_states = next_states.detach()
             q_values = self.Q_local(states)
             best_action = torch.argmax(q_values).item()
             self.debug(best_action)
