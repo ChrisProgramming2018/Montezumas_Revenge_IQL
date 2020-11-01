@@ -12,7 +12,7 @@ def train(env, config):
     memory = ReplayBuffer((3, config["size"], config["size"]), (1,), config["expert_buffer_size"], config["device"])
     memory.load_memory(config["buffer_path"])
     agent = Agent(200, 1, config["action_dim"], config)
-    memory.idx = 1000
+    memory.idx = 900
     print("size buffer ", memory.idx)
     if config["train_predicter"]:
         for t in range(config["predicter_time_steps"]):

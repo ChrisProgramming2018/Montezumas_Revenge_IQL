@@ -84,6 +84,7 @@ class Agent():
         states, next_states, actions, dones = memory.expert_policy(self.batch_size)
         states = states.type(torch.float32)
         next_states = next_states.type(torch.float32)
+        logging.debug("action{})".format(actions))
         #states = self.encoder.create_vector(states.detach())
         #next_states = self.target_encoder.create_vector(next_states.detach())
         states = self.encoder.create_vector(states)
@@ -194,7 +195,7 @@ class Agent():
         #print("action shape ", actions.shape)
         action_prob = output.gather(1, actions)
         #print("action pob old {} ".format(action_prob, actions))
-        logging.debug("action_prob {})".format(action_prob))
+        #logging.debug("action_prob {})".format(action_prob))
         action_prob = action_prob.detach() + torch.finfo(torch.float32).eps
         #print("action_prob ", action_prob.shape)
         #print("action pob {} ".format(action_prob, actions))
@@ -317,9 +318,9 @@ class Agent():
     def act(self, state):
         state = torch.Tensor(state).to(self.device)
         state = self.encoder.create_vector(state.unsqueeze(0))
-        logging.debug("state {})".format(state))
+        #logging.debug("state {})".format(state))
         action = self.Q_local(state.unsqueeze(0))
-        logging.debug("Q {})".format(action))
+        #logging.debug("Q {})".format(action))
         action = torch.argmax(action) 
         return action.item()
 
