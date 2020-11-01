@@ -14,8 +14,9 @@
   "expert_buffer_size": 20000,
   "history_length": 3,
   "size": 84,
-  "batch_size": 32,
+  "batch_size": 128,
   "action_dim": 16,
+  "image_pad": 4,
   "buffer_path": "expert_policy",
   "device": "cuda"
 }
