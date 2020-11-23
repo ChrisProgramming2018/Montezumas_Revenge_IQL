@@ -356,6 +356,7 @@ class Agent():
         self.predicter.load_state_dict(torch.load(filename + "_predicter.pth"))
         self.optimizer_pre.load_state_dict(torch.load(filename + "_predicter_optimizer.pth"))
         self.R_local.load_state_dict(torch.load(filename + "_r_net.pth"))
+        self.encoder.load_state_dict(torch.load(filename + "_encoder.pth"))
         
         print("Load models to {}".format(filename))
 
@@ -370,6 +371,7 @@ class Agent():
         torch.save(self.optimizer.state_dict(), filename + "_q_net_optimizer.pth")
         torch.save(self.R_local.state_dict(), filename + "_r_net.pth")
         torch.save(self.q_shift_local.state_dict(), filename + "_q_shift_net.pth")
+        torch.save(self.encoder.state_dict(), filename + "_encoder.pth")
 
         print("save models to {}".format(filename))
 

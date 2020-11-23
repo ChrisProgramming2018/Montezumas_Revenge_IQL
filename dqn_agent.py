@@ -33,10 +33,11 @@ class DQNAgent():
         self.state_size = state_size
         self.action_size = action_size
         self.seed = random.seed(config["seed"])
+        self.device = config["device"]
 
         # Q-Network
-        self.qnetwork_local = QNetwork(state_size, action_size, seed).to(device)
-        self.qnetwork_target = QNetwork(state_size, action_size, seed).to(device)
+        self.qnetwork_local = QNetwork(state_size, action_size, config["seed"]).to(self.device)
+        self.qnetwork_target = QNetwork(state_size, action_size, config["seed"]).to(self.device)
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=config["lr"])
         self.encoder = Encoder(config).to(self.device)
         self.encoder_optimizer = torch.optim.Adam(self.encoder.parameters(), config["lr_encoder"])
@@ -44,14 +45,20 @@ class DQNAgent():
         # Replay memory
         # Initialize time step (for updating every UPDATE_EVERY steps)
         self.t_step = 0
-        self.gamma = 
-    
+        self.gamma = config["gamma"] 
+        self.batch_size = config["batch_size"]
+
     def step(self, memory):
-        obses, actions, rewards, next_obses, not_dones_no_max = memory.sample(self.batch_size)
+        states, actions, rewards, next_states, dones = memory.sample(self.batch_size)
+        states = states.type(torch.float32)
+        states = self.encoder.create_vector(states)
+        next_states = next_states.type(torch.float32)
+        next_states = self.encoder.create_vector(next_states)
+
         # Learn every UPDATE_EVERY time steps.
         self.t_step = (self.t_step + 1) % UPDATE_EVERY
         if self.t_step == 0:
-            self.learn(experiences)
+            self.learn(self, states, actions, rewards, next_states, dones)
 
     def act(self, state, eps=0.):
         """Returns actions for given state as per current policy.
@@ -62,7 +69,7 @@ class DQNAgent():
             eps (float): epsilon, for epsilon-greedy action selection
         """
         state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        states = self.encoder.create_vector(states)
+        state = self.encoder.create_vector(state)
         self.qnetwork_local.eval()
         with torch.no_grad():
             action_values = self.qnetwork_local(state)
@@ -74,15 +81,14 @@ class DQNAgent():
         else:
             return random.choice(np.arange(self.action_size))
 
-    def learn(self, experiences):
+    def learn(self, states, actions, rewards, next_states, dones):
         """Update value parameters using given batch of experience tuples.
         Params
         ======
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples 
             gamma (float): discount factor
         """
-        states, actions, rewards, next_states, dones = experiences
-
+        print(dones)
         # Get max predicted Q values (for next states) from target model
         Q_targets_next = self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(1)
         # Compute Q targets for current states 

@@ -1,38 +1,48 @@
 import gym
 import random
 import torch
+import json
+import argparse
 import numpy as np
 from dqn_agent import DQNAgent
-from replay_buffer2 import ReplayBuffer
 from iql_agent import mkdir
 
-env = gym.make('LunarLander-v2')
-env.seed(0)
 
-print('State shape: ', env.observation_space.shape)
-print('Number of actions: ', env.action_space.n)
-agent = DQNAgent(state_size=8, action_size=4, seed=0)
 
-agent.qnetwork_local.load_state_dict(torch.load('checkpoint.pth'))
-memory = ReplayBuffer((8,), (1,), 20000, 'cuda')
-n_episodes = 40
-max_t = 500
-eps = 0
-for i_episode in range(1, n_episodes+1):
-    state = env.reset()
-    score = 0
-    for t in range(max_t):
-        action = agent.act(state, eps)
-        next_state, reward, done, _ = env.step(action)
-        score += reward
-        memory.add(state, action, reward, next_state, done, done)
-        state = next_state
-        # env.render()
-        if done:
-            print("Episode {}  Reward {}".format(i_episode, score))
-            break
 
-mkdir("","expert_policy")
-print("save memory ...")
-memory.save_memory("expert_policy")
-print("... memory saved")
+
+
+def main(args):
+    with open (args.param, "r") as f:
+        config = json.load(f)
+    
+    env = gym.make('MontezumaRevenge-v0')
+    env.seed(0)
+    
+    print('State shape: ', env.observation_space.shape)
+    print('Number of actions: ', env.action_space.n)
+    agent = DQNAgent(state_size=200, action_size=7, config=config)
+    # agent.qnetwork_local.load_state_dict(torch.load('checkpoint.pth'))
+    n_episodes = 40
+    max_t = 500
+    eps = 0
+    action_size = 7
+    for i_episode in range(1, n_episodes+1):
+        state = env.reset()
+        score = 0
+        for t in range(max_t):
+            #action = agent.act(state, eps)
+            action = random.choice(np.arange(action_size))
+            next_state, reward, done, _ = env.step(action)
+            score += reward
+            state = next_state
+            env.render()
+            if done:
+                break
+        print("Episode {}  Reward {} Steps {}".format(i_episode, score, t))
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--param', default="param.json", type=str)
+    arg = parser.parse_args()
+    main(arg)

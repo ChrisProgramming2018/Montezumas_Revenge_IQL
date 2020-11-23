@@ -4,6 +4,7 @@
   "lr": 1e-4,
   "lr_encoder": 1e-4,
   "tau": 1e-3,
+  "gamma": 0.99,
   "episodes": 10000000,
   "predicter_time_steps": 300000,
   "train_predicter": 0,

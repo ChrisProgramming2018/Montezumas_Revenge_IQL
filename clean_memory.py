@@ -19,31 +19,26 @@ def time_format(sec):
 
 
 
-def train(env, config):
+def clean(config):
     """
 
     """
-    now = datetime.now()
-    dt_string = now.strftime("%d_%m_%Y_%H:%M:%S")
-    t0 = time.time()
-    #memory = ReplayBuffer((8,), (1,), config["expert_buffer_size"], config["device"])
     memory = ReplayBuffer((3, config["size"], config["size"]), (1,), config["expert_buffer_size"], config["image_pad"], config["device"])
-    memory.load_memory(config["buffer_path"])
-    print("memory idx ",memory.idx)  
-    agent = Agent(state_size=200, action_size=7,  config=config) 
-    #agent.load("models/42000-")
     memory_t = ReplayBuffer((3, config["size"], config["size"]), (1,), config["expert_buffer_size"], config["image_pad"], config["device"])
-    memory_t.load_memory(config["expert_buffer_path"])
+    memory.load_memory(config["buffer_path"])
+    #memory_t.load_memory(config["expert_buffer_path"])
     memory.idx = config["idx"] 
-    memory_t.idx = config["idx"] * 4
+    #memory_t.idx = config["idx"] * 4
     print("memory idx ",memory.idx)  
     #print("memory_expert idx ",memory_t.idx)
     a = 0
     for idx in range(100):
-        print(memory.actions[idx])
-        if memory.actions[idx] > a:
-            a = memory.actions[idx]
+        if memory.actions[idx] < 6:
+            memory_t.add(memory.obses[idx], memory.actions[idx], 0, memory.next_obses[idx], 1, 1)
 
+    print(memory_t.idx)
+    memory_t.save_memory("cleaned")
+    sys.exit()
         
     for t in range(config["predicter_time_steps"]):
         text = "Train Predicter {}  \ {}  time {}  \r".format(t, config["predicter_time_steps"], time_format(time.time() - t0))
@@ -54,4 +49,4 @@ def train(env, config):
         if t % 500 == 0:
             agent.save("models-{}/{}-".format(dt_string, t))
             agent.test_predicter(memory)
-            agent.test_q_value(memory)
+            # agent.test_q_value(memory)

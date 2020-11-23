@@ -30,15 +30,41 @@ class FrameStack(Wrapper):
         num_stack (int): number of stacks
         lz4_compress (bool): use lz4 to compress the frames internally
     """
-    def __init__(self, env, config):
+    def __init__(self, env, args):
         super(FrameStack, self).__init__(env)
-        self.state_buffer = deque([], maxlen=config["history_length"])
+        self.state_buffer = deque([], maxlen=args.history_length)
         self.env = env
-        self.size = config["size"]
-        self.device = config["device"]
-        self.history_length = config["history_length"]
+        self.size = args.size
+        self.device = args.device
+        self.history_length = args.history_length
 
     def step(self, action):
+        """
+
+        map the actions 
+        2 up  -> 0
+        5 down -> 1
+        3 right ->  2
+        4 left -> 3
+        11 jump right -> 4
+        12 jump left -> 5
+
+        """
+        if action == 0:
+            action = 2
+        elif action == 1:
+            action = 5
+        elif action == 2:
+            action = 3
+        elif action == 3:
+            action = 4
+        elif action == 4:
+            action = 11
+        elif action == 5:
+            action = 12
+        elif action == 6:
+            action = 0
+
         observation, reward, done, info = self.env.step(action)
         state = self._create_next_obs(observation)
         return state, reward, done, info
