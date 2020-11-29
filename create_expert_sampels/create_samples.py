@@ -1,3 +1,5 @@
+# Copyright 2020
+# Author: Christian Leininger <info2016frei@gmail.com>
 import gym
 import time
 import sys
@@ -43,6 +45,7 @@ def main(args):
         print("continue with {}  samples".format(memory.idx))
     env = FrameStack(env, args)
     state = env.reset()
+    env.render()
     done = False
     steps = 0
     score = 0

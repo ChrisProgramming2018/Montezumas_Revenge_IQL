@@ -1,3 +1,5 @@
+# Copyright 2020
+# Author: Christian Leininger <info2016frei@gmail.com>
 import numpy as np
 import torch
 import torch.nn as nn
