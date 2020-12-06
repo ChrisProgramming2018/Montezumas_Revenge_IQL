@@ -7,7 +7,7 @@ from helper import FrameStack
 from replay_buffer import ReplayBuffer
 import argparse
 import readchar
-
+from copy import deepcopy
 
 def map(action):
     """ Maps the the given string to the corresponding
@@ -31,6 +31,8 @@ def map(action):
         return 5
     if action == "x":
         return 6
+    if action == "q":
+        return 7
 
 
 def main(args):
@@ -47,13 +49,32 @@ def main(args):
     state = env.reset()
     env.render()
     done = False
-    steps = 0
+    steps = memory.idx
     score = 0
+    jump = False
     while True:
         steps += 1
+        print("memory idx {}".format(memory.idx))
         while True:
             try:
                 input_action = readchar.readchar()
+                if input_action == "r":
+                    print("before memory idx {}".format(memory.idx))
+                    memory.idx = memory.idx - 4
+                    print("after memory idx {}".format(memory.idx))
+                if input_action == "1":
+                    # saved_state = env.sim.get_state()
+                    snapshot = env.ale.cloneState()
+                    print("save env")
+                
+                if input_action == "l":
+                    #env.sim.set_state(saved_state)
+                    env.ale.restoreState(snapshot)
+                    print("load env")
+
+                if input_action == "f" or input_action ==" " or input_action == "q":
+                    i = 0
+                    jump = True
                 if input_action == "p":
                     print("wanna save buffer press s")
                     io = readchar.readchar()
@@ -68,20 +89,33 @@ def main(args):
                 break
             except Exception:
                 continue
-
+        if jump:
+            while True:
+                i +=1
+                env.render()
+                next_state, reward, done, _ = env.step(action)
+                memory.add(state, action, state, done)
+                state = next_state
+                if done:
+                    break
+                if i >= 6:
+                    action = 0
+                    jump =False
+                    break
         env.render()
         next_state, reward, done, _ = env.step(action)
-        memory.add(state, action, state)
+        memory.add(state, action, state, done)
         state = next_state
         print("action", action)
+        print("reward", reward)
         score += reward
         if steps % 100 == 0:
             memory.save_memory("expert_policy-{}/".format(steps))
         if done:
             print("Episodes exit with score {}".format(score))
             break
+    print("sampels in buffer ", memory.idx)
     env.close()
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
