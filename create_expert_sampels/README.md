@@ -6,7 +6,7 @@
 
 For createing expert examples 
 
-![env][image1]
+![screenshot][MontezumasRevenge.png]
 .  
 In order to move the character 
  Eight discrete actions are available, corresponding to:
