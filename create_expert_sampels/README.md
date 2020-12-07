@@ -6,8 +6,7 @@
 
 For createing expert examples 
 
-![screenshot][MontezumasRevenge.png]
-.  
+<img src= "MontezumasRevenge.png">
 In order to move the character 
  Eight discrete actions are available, corresponding to:
 - **`w`** - move up.
