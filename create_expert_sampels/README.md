@@ -1,12 +1,12 @@
 
 # Project: Montezumas Revenge 
 
-### Introduction
-
 
 For createing expert examples 
 
 <img src= "MontezumasRevenge.png">
+
+### Introduction
 In order to move the character 
  Eight discrete actions are available, corresponding to:
 - **`w`** - move up.
