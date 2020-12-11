@@ -16,7 +16,7 @@ from torch.autograd import Variable
 torch.set_printoptions(threshold=5000)
 import logging
 from datetime import datetime
-from utils import mkdir
+from utils import mkdir, write_into_file 
 
 
 
@@ -47,7 +47,6 @@ class Agent():
         self.fc1 = config["fc1_units"]
         self.fc2 = config["fc2_units"]
         self.fc3 = config["fc3_units"]
-        
         self.qnetwork_local = QNetwork(state_size, action_size, self.fc1, self.fc2, self.fc3, self.seed).to(self.device)
         self.qnetwork_target = QNetwork(state_size, action_size,self.fc1, self.fc2, self.fc3,  self.seed).to(self.device)
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=self.lr)
@@ -85,6 +84,11 @@ class Agent():
         for a in range(self.action_size):
             action = torch.Tensor(1) * 0 +  a
             self.all_actions.append(action.to(self.device))
+        self.best_r = 0
+        self.best_q = 0
+        self.best_r_step = 0
+        self.best_q_step = 0
+        self.steps = 0
     
     def pretrain(self, memory_ex):
         logging.debug("--------------------------pretrain update {}-----------------------------------------------".format(self.steps))
@@ -95,10 +99,10 @@ class Agent():
         self.steps += 1
     
     def learn(self, memory_ex, memory_all):
+        self.steps += 1
         states, next_states, actions = memory_ex.expert_policy(self.batch_size)
         states = states.type(torch.float32).div_(255)
         states = self.encoder.create_vector(states) #.detach()
-        self.steps += 1
         self.state_action_frq(states, actions)
         states, next_states, actions = memory_all.expert_policy(self.batch_size)
         states = states.type(torch.float32).div_(255)
@@ -360,12 +364,15 @@ class Agent():
         torch.save(self.qnetwork_local.state_dict(), filename + "_q_net.pth")
         torch.save(self.optimizer.state_dict(), filename + "_q_net_optimizer.pth")
         torch.save(self.R_local.state_dict(), filename + "_r_net.pth")
+        torch.save(self.optimizer_r.state_dict(), filename + "_r_net_optimizer.pth")
         torch.save(self.q_shift_local.state_dict(), filename + "_q_shift_net.pth")
+        torch.save(self.optimizer_shift.state_dict(), filename + "_q__shift_net_optimizer.pth")
         torch.save(self.encoder.state_dict(), filename + "_encoder.pth")
+        torch.save(self.encoder_optimizer.state_dict(), filename + "_endcoder_optimizer.pth")
         print("save models to {}".format(filename))
 
     def test_q_value(self, memory):
-        same_action = 0
+        same_r = 0
         same_q = 0
         same_sh = 0
         test_elements = memory.idx
@@ -384,7 +391,7 @@ class Agent():
                 q_values = self.qnetwork_local(states.detach()).detach()
                 qsh_values = self.q_shift_target(states.detach()).detach()
                 best_sh = torch.argmax(qsh_values).item()
-                best_action = torch.argmax(r_values).item()
+                best_r = torch.argmax(r_values).item()
                 best_q = torch.argmax(q_values).item()
                 text = "action {} r value {} ".format(actions.item(), r_values.data)
                 # self.compute_r_function(states.detach(), actions.unsqueeze(0), log=True)
@@ -395,17 +402,13 @@ class Agent():
                 actions = actions.type(torch.int64)
                 if  actions.item() == best_q:
                     same_q += 1
-                if  actions.item() == best_action:
-                    same_action += 1
-                else:
-                    if all_diff < 5:
-                        all_diff += 1
-                        # print(text)
+                if  actions.item() == best_r:
+                    same_r += 1
 
                 if  actions.item() == best_sh:
                     same_sh += 1
 
-        text = "same action {} of {} ".format(same_action, test_elements)
+        text = "same r {} of {} ".format(same_r, test_elements)
         print(text)
         logging.debug(text)
         text = "same q {} of {} ".format(same_q, test_elements)
@@ -414,7 +417,16 @@ class Agent():
         text = "same q shift {} of {} ".format(same_q, test_elements)
         print(text)
         logging.debug(text)
+        self.writer.add_scalar('same_r', same_r, self.steps)
+        self.writer.add_scalar('same_q', same_q, self.steps)
+        
+        if same_r > self.best_r:
+            self.best_r = same_r
+            self.best_r_step = self.steps
 
+        if same_q > self.best_q:
+            self.best_q = same_q
+            self.best_q_step = self.steps
 
     def act(self, states):
         states = torch.as_tensor(states, device=self.device).unsqueeze(0)

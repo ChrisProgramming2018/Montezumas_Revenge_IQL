@@ -69,8 +69,8 @@ class ReplayBuffer(object):
         obses = obses.type(torch.float32)
         next_obses = next_obses.type(torch.float32)
  
-        obses = self.aug_trans(obses)
-        next_obses = self.aug_trans(next_obses)
+        #obses = self.aug_trans(obses)
+        #next_obses = self.aug_trans(next_obses)
         
         return obses, next_obses, actions
 
