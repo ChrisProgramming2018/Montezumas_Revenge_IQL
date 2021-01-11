@@ -1,130 +1,88 @@
-# Copyright 2020
-# Author: Christian Leininger <info2016frei@gmail.com>
 import gym
 import time
 import sys
 from helper import FrameStack
-from replay_buffer import ReplayBuffer
+from replay_buffer import ReplayBuffer 
 import argparse
-import readchar
-from copy import deepcopy
-
-def map(action):
-    """ Maps the the given string to the corresponding
-        action for the env (0-6)
-        Args:
-            param1(str): action
-        Return:
-            action in int
-    """
-    if action == "w":
-        return 0
-    if action == "s":
-        return 1
-    if action == "d":
-        return 2
-    if action == "a":
-        return 3
-    if action == "f":
-        return 4
-    if action == " ":
-        return 5
-    if action == "x":
-        return 6
-    if action == "q":
-        return 7
-
 
 def main(args):
-    """ Creates expert examples for MontezumaRevenge env for Inverse Q Learning
-    """
-    print(sys.version)
-    env = gym.make(args.env_name)
+    print(sys.version) 
+    env = gym.make("MontezumaRevenge-v0")
     print(env.observation_space)
-    memory = ReplayBuffer((3, 84, 84), (1, ), args.buffer_size, args.device)
-    if args.continue_samples:
-        memory.load_memory(args.path)
-        print("continue with {}  samples".format(memory.idx))
-    env = FrameStack(env, args)
+    memory = ReplayBuffer((3,84,84),(1,), args.buffer_size, 0, args.device)
+    memory.load_memory("expert_policy/")
+    print("continue with {}  samples".format(memory.idx))
+    env  = FrameStack(env, args)
     state = env.reset()
-    env.render()
+    score = 0 
     done = False
-    steps = memory.idx
-    score = 0
-    jump = False
+    steps = 0
+    continue_true = False
+    continue_true = True
+    if continue_true:
+        memory.load_memory("expert_policy")
+        amout = 400
+        for idx in range(amout):
+            action = memory.actions[idx]
+            print(action)
+            env.render()
+            time.sleep(0.01)
+            next_state, reward, done, _ = env.step(action)
+
+    print("buffer actions done")
     while True:
+        #action = env.action_space.sample()
         steps += 1
-        print("memory idx {}".format(memory.idx))
         while True:
             try:
-                input_action = readchar.readchar()
-                if input_action == "r":
-                    print("before memory idx {}".format(memory.idx))
-                    memory.idx = memory.idx - 4
-                    print("after memory idx {}".format(memory.idx))
-                if input_action == "1":
-                    # saved_state = env.sim.get_state()
-                    snapshot = env.ale.cloneState()
-                    print("save env")
-                
-                if input_action == "l":
-                    #env.sim.set_state(saved_state)
-                    env.ale.restoreState(snapshot)
-                    print("load env")
-
-                if input_action == "f" or input_action ==" " or input_action == "q":
-                    i = 0
-                    jump = True
-                if input_action == "p":
-                    print("wanna save buffer press s")
-                    io = readchar.readchar()
-                    if io == "s":
-                        memory.save_memory("expert_policy-{}/".format(steps))
-                    print("exit")
-                    env.close()
-                    return
-                action = map(input_action)
+                action = input()
+                action = int(action)
+                if action > 1000:
+                    sys.exit()
                 if action > 13:
                     continue
+
                 break
-            except Exception:
+            except:
                 continue
-        if jump:
-            while True:
-                i +=1
-                env.render()
-                next_state, reward, done, _ = env.step(action)
-                memory.add(state, action, state, done)
-                state = next_state
-                if done:
-                    break
-                if i >= 6:
-                    action = 0
-                    jump =False
-                    break
+               
+        # 3 move right 4 move left
+        # 5 go done 2 up
+        # 10 jump
+        # 11 jump right  12 jumpy left
+        #action = 13
+
+        print("a", action)
         env.render()
         next_state, reward, done, _ = env.step(action)
-        memory.add(state, action, state, done)
+        memory.add(state, action, next_state)
         state = next_state
-        print("action", action)
-        print("reward", reward)
+        print("state ", next_state.shape)
+        print("action")
+        print("reward ", reward)
+        #action = 0
+        #time.sleep(1)
         score += reward
-        if steps % 100 == 0:
-            memory.save_memory("expert_policy-{}/".format(steps))
+        if steps % 10 == 0:
+            path = "expert_policy-{}/".format(steps)
+            memory.save_memory(path)
         if done:
-            print("Episodes exit with score {}".format(score))
+            print("score ", score)
             break
-    print("sampels in buffer ", memory.idx)
+
+
     env.close()
+
+
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env_name', default="MontezumaRevenge-v0", type=str)
+    parser.add_argument('--env-name', default="kuka_block_grasping-v0", type=str, help='Name of a environment (set it to any Continous environment you want')
     parser.add_argument('--size', default=84, type=int)
     parser.add_argument('--history_length', default=3, type=int)
     parser.add_argument('--device', default='cuda', type=str)
     parser.add_argument('--buffer_size', default=20000, type=int)
-    parser.add_argument('--continue_samples', default=False, type=bool)
-    parser.add_argument('--path', default='expert_policy/', type=str)
     arg = parser.parse_args()
     main(arg)
