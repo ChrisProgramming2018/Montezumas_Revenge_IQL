@@ -8,10 +8,10 @@ with open ("param.json", "r") as f:
 
 config = param
 
-memory = ReplayBuffer((3, config["size"], config["size"]), (1,), config["expert_buffer_size"], config["image_pad"], config["device"])
+memory = ReplayBuffer((6, config["size"], config["size"]), (1,), config["expert_buffer_size"], config["image_pad"], config["device"])
 memory.load_memory(config["buffer_path"])
 
-memory_expert = ReplayBuffer((3, config["size"], config["size"]), (1,), config["expert_buffer_size"], config["image_pad"], config["device"])
+memory_expert = ReplayBuffer((6, config["size"], config["size"]), (1,), config["expert_buffer_size"], config["image_pad"], config["device"])
 
 for idx in range(memory.idx):
     for a in range(8):

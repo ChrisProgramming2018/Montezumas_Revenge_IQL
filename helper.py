@@ -64,8 +64,6 @@ class FrameStack(Wrapper):
             action = 12
         elif action == 6:
             action = 0
-        elif action == 7:
-            action = 10
 
         observation, reward, done, info = self.env.step(action)
         state = self._create_next_obs(observation)

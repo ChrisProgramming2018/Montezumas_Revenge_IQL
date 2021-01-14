@@ -17,25 +17,27 @@ def main(args):
         config = json.load(f)
     
     env = gym.make('MontezumaRevenge-v0')
+    env.seed(args.seed)
     env  = FrameStack(env, args)
+
     print('State shape: ', env.observation_space.shape)
     print("use agent ", args.agent)
-    agent = DQNAgent(state_size=200, action_size=8, config=config)
-    agent_r = Agent(state_size=200, action_size=8,  config=config)
+    agent = DQNAgent(state_size=200, action_size=7, config=config)
+    agent_r = Agent(state_size=200, action_size=7,  config=config)
     #agent_r.load("models-28_11_2020_13:28:57/51800-")
     #agent_r.load("models-29_11_2020_08:35:01/80500-")
-    agent_r.load("search_results/models/9000-")
+    agent_r.load("models-29_11_2020_20:45:22/7000-")
     env = gym.wrappers.Monitor(env, "./vid", video_callable=lambda episode_id: True,force=True)
     #agent.qnetwork_local.load_state_dict(torch.load('checkpoint-score80.47156817885116_epi_125.pth'))
-    #agent.qnetwork_local.load_state_dict(torch.load('models/checkpoint_q-{}.pth'.format(args.agent)))
-    #agent.encoder.load_state_dict(torch.load('models/checkpoint_e-{}.pth'.format(args.agent)))
+    agent.qnetwork_local.load_state_dict(torch.load('models/checkpoint_q-{}.pth'.format(args.agent)))
+    agent.encoder.load_state_dict(torch.load('models/checkpoint_e-{}.pth'.format(args.agent)))
     n_episodes = 10
     max_t = 500
     eps = 0
-    action_size = 8
+    action_size = 7
     for i_episode in range(1, n_episodes+1):
-        env.seed(i_episode)
         state = env.reset()
+        env.seed(random.randint(0,30))
         score = 0
         for t in range(max_t):
 

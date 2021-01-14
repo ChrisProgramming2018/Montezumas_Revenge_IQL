@@ -9,7 +9,7 @@ def main(args):
     print(sys.version) 
     env = gym.make("MontezumaRevenge-v0")
     print(env.observation_space)
-    memory = ReplayBuffer((3,84,84),(1,), args.buffer_size, args.device)
+    memory = ReplayBuffer((3,84,84),(1,), args.buffer_size, 0, args.device)
     memory.load_memory("expert_policy/")
     print("continue with {}  samples".format(memory.idx))
     env  = FrameStack(env, args)
@@ -55,7 +55,7 @@ def main(args):
         print("a", action)
         env.render()
         next_state, reward, done, _ = env.step(action)
-        memory.add(state, action, state)
+        memory.add(state, action, next_state)
         state = next_state
         print("state ", next_state.shape)
         print("action")
